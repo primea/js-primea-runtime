@@ -29,13 +29,16 @@ async function main () {
     const wasm = fs.readFileSync(argv.create)
     const {module} = hypervisor.createActor(WasmContainer.typeId, wasm)
     if (argv.run) {
-      const funcRef = module.getFuncRef(argv.run)
-      funcRef.gas = argv.gas || 20000
-      const message = new Message({
-        funcRef,
-        funcArguments: [new FunctionRef({actorID: egress.id, params: ['data']})]
-      }).on('execution:error', e => console.error(e))
-      hypervisor.send(message)
+      let xs = argv.run.split(",");
+      xs.map((f) => {
+          const funcRef = module.getFuncRef(f)
+          funcRef.gas = argv.gas || 20000
+          const message = new Message({
+            funcRef,
+            funcArguments: [new FunctionRef({actorID: egress.id, params: ['data']})]
+          }).on('execution:error', e => console.error(e))
+          hypervisor.send(message)
+      });
     }
   }
   const sr = await hypervisor.createStateRoot()
