@@ -18,16 +18,22 @@ egress.on('message', msg => {
   console.log(msg.funcArguments[0].toString())
 })
 
-const hypervisor = new Hypervisor(tree, [WasmContainer], [egress])
+const hypervisor = new Hypervisor({
+  tree,
+  containers: [WasmContainer],
+  drivers: [egress]
+})
 
 async function main () {
   if (argv.root) {
-    await hypervisor.setStateRoot(Buffer.from(argv.root, 'hex'))
+    const root = argv.root.slice(0, 2) === '0x' ? argv.root.slice(2) : argv.root
+    await hypervisor.setStateRoot(Buffer.from(root, 'hex'))
   }
 
   if (argv.create) {
     const wasm = fs.readFileSync(argv.create)
     const {module} = hypervisor.createActor(WasmContainer.typeId, wasm)
+
     if (argv.run) {
       let xs = argv.run.split(",");
       xs.map((f) => {
