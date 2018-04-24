@@ -31,9 +31,23 @@ egress.on('message', msg => {
   console.log(msg.funcArguments[0].toString())
 })
 
+class TestWasmContainer extends WasmContainer {
+  constructor (actor) {
+    super(actor)
+    const inter = {
+      env: {
+        abort: () => {
+          console.log('abort!')
+        }
+      }
+    }
+    this.interface = Object.assign(this.interface, inter)
+  }
+}
+
 const hypervisor = new Hypervisor({
   tree,
-  containers: [WasmContainer],
+  containers: [TestWasmContainer],
   drivers: [egress]
 })
 
@@ -56,7 +70,7 @@ async function main () {
       funcs.forEach(f => {
         const params = module.exports[f]
         const funcRef = module.getFuncRef(f)
-        funcRef.gas = argv.gas || 20000
+        funcRef.gas = argv.gas || 100000
 
         let funcArguments = []
         if (argv[f]) {
