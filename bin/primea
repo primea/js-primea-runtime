@@ -4,8 +4,6 @@ const Hypervisor = require('primea-hypervisor')
 const {Message, FunctionRef} = require('primea-objects')
 const EgressDriver = require('primea-hypervisor/egressDriver')
 const WasmContainer = require('primea-wasm-container')
-const yargs = require('yargs')
-const argv = yargs.argv
 
 const level = require('level-browserify')
 const RadixTree = require('dfinity-radix-tree')
@@ -14,41 +12,131 @@ const db = level(`${__dirname}/testdb`)
 const tree = new RadixTree({db})
 const egress = new EgressDriver()
 
+const argv = require('yargs')
+  .help('h')
+  .alias('h', 'help')
+  .alias('c', 'create')
+  .describe('c', 'Path of wasm binary file to create')
+  .alias('f', 'funcs')
+  .describe('f', 'Functions to invoke (comma separated)')
+  .alias('a', 'actor')
+  .describe('a', 'Get state of an actor')
+  .alias('r', 'root')
+  .describe('r', 'Initial state root')
+  .example('$0 -c test.wasm -r ed418f9ba309cb65e34a16ed74253fc813a78412', 'create module test with initial state root')
+  .example('$0 -c test.wasm -f main --main 1,2 -a', 'create module, invoke main(1, 2), and get state')
+  .argv
+
 egress.on('message', msg => {
   console.log(msg.funcArguments[0].toString())
 })
 
+class TestWasmContainer extends WasmContainer {
+  constructor (actor) {
+    super(actor)
+    const inter = {
+      env: {
+        abort: () => {
+          console.log('abort!')
+        }
+      }
+    }
+    this.interface = Object.assign(this.interface, inter)
+  }
+}
+
 const hypervisor = new Hypervisor({
   tree,
-  containers: [WasmContainer],
+  containers: [TestWasmContainer],
   drivers: [egress]
 })
 
+const toBuffer = arg => Buffer.from(arg.slice(0, 2) === '0x' ? arg.slice(2) : arg, 'hex')
+
 async function main () {
   if (argv.root) {
-    const root = argv.root.slice(0, 2) === '0x' ? argv.root.slice(2) : argv.root
-    await hypervisor.setStateRoot(Buffer.from(root, 'hex'))
+    await hypervisor.setStateRoot(toBuffer(argv.root))
   }
 
+  let module
   if (argv.create) {
     const wasm = fs.readFileSync(argv.create)
-    const {module} = hypervisor.createActor(WasmContainer.typeId, wasm)
+    module = hypervisor.createActor(WasmContainer.typeId, wasm).module
 
-    if (argv.run) {
-      let xs = argv.run.split(",");
-      xs.map((f) => {
-          const funcRef = module.getFuncRef(f)
-          funcRef.gas = argv.gas || 20000
-          const message = new Message({
-            funcRef,
-            funcArguments: [new FunctionRef({actorID: egress.id, params: ['data']})]
-          }).on('execution:error', e => console.error(e))
-          hypervisor.send(message)
-      });
+    if (argv.funcs) {
+      const funcs = argv.funcs.split(',')
+      const funcArgsIndex = {}
+
+      funcs.forEach(f => {
+        const params = module.exports[f]
+        const funcRef = module.getFuncRef(f)
+        funcRef.gas = argv.gas || 100000
+
+        let funcArguments = []
+        if (argv[f]) {
+          let thisArg = argv[f]
+          if (Array.isArray(thisArg)) {
+            if (!funcArgsIndex[f]) {
+              funcArgsIndex[f] = 0
+            }
+            thisArg = thisArg[funcArgsIndex[f]++]
+          }
+          const args = String(thisArg)
+          funcArguments = args.split(',').map(arg => {
+            if (arg.slice(0, 2) === '0x') {
+              return Buffer.from(arg.slice(2), 'hex')
+
+            } else if (!isNaN(arg)) {
+              return Number(arg)
+            }
+
+            return arg
+          })
+        }
+
+        if (params.length != funcArguments.length) {
+          console.error('Invalid arguments, want:', params, 'got:', funcArguments)
+          return
+        }
+
+        console.log('Invoke', funcRef.identifier[1], funcArguments)
+
+        const message = new Message({
+          funcRef,
+          funcArguments
+        }).on('execution:error', e => console.error(e))
+        hypervisor.send(message)
+      })
+      console.log()
     }
   }
+
   const sr = await hypervisor.createStateRoot()
-  console.log('state root:', sr.toString('hex'))
+  console.log('New state root:', sr.toString('hex'))
+
+  let actorId
+  if (argv.create && !!module) {
+    actorId = module.id.id
+    console.log('Created actor with id', actorId.toString('hex'))
+  }
+  if (argv.actor) {
+    if (typeof argv.actor == 'string') {
+      actorId = toBuffer(argv.actor)
+    }
+    if (!actorId) {
+      return
+    }
+
+    console.log('\nGet state for actor', actorId.toString('hex'))
+    const node = await hypervisor.tree.get(actorId)
+    if (node.value) {
+      console.log('Nonce:', node.value[1])
+      const storage = await hypervisor.tree.graph.get(node.node, '2')
+      console.log('Storage:', storage)
+    } else {
+      console.log('Actor not found!')
+    }
+  }
 }
 
 main()
