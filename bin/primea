@@ -23,6 +23,7 @@ const argv = require('yargs')
   .describe('a', 'Get state of an actor')
   .alias('r', 'root')
   .option('gas', { default: 100000 })
+  .option('quiet', { default: false })
   .describe('r', 'Initial state root')
   .example('$0 -c test.wasm -r ed418f9ba309cb65e34a16ed74253fc813a78412', 'create module test with initial state root')
   .example('$0 -c test.wasm -f main --main 1,2 -a', 'create module, invoke main(1, 2), and get state')
@@ -119,12 +120,16 @@ async function main () {
   }
 
   const sr = await hypervisor.createStateRoot()
-  console.log('New state root:', sr.toString('hex'))
+  if (!argv.quiet) {
+    console.log('New state root:', sr.toString('hex'))
+  }
 
   let actorId
   if (argv.create && !!module) {
     actorId = module.id.id
-    console.log('Created actor with id', actorId.toString('hex'))
+    if (!argv.quiet) {
+      console.log('Created actor with id', actorId.toString('hex'))
+    }
   }
   if (argv.actor) {
     if (typeof argv.actor == 'string') {
