@@ -22,9 +22,12 @@ const argv = require('yargs')
   .alias('a', 'actor')
   .describe('a', 'Get state of an actor')
   .alias('r', 'root')
+  .option('gas', { default: 100000 })
+  .option('quiet', { default: false })
   .describe('r', 'Initial state root')
   .example('$0 -c test.wasm -r ed418f9ba309cb65e34a16ed74253fc813a78412', 'create module test with initial state root')
   .example('$0 -c test.wasm -f main --main 1,2 -a', 'create module, invoke main(1, 2), and get state')
+  .example('$0 -c test.wasm -f main --main egress', 'create module, invoke main(egress) where egress is a built-in funcref for printing to stdout')
   .argv
 
 egress.on('message', msg => {
@@ -70,7 +73,7 @@ async function main () {
       funcs.forEach(f => {
         const params = module.exports[f]
         const funcRef = module.getFuncRef(f)
-        funcRef.gas = argv.gas || 100000
+        funcRef.gas = argv.gas
 
         let funcArguments = []
         if (argv[f]) {
@@ -99,6 +102,11 @@ async function main () {
           return
         }
 
+        let index = funcArguments.indexOf('egress')
+        if (index !== -1) {
+            funcArguments[index] = new FunctionRef({actorID: egress.id, params: ['data']})
+        }
+
         console.log('Invoke', funcRef.identifier[1], funcArguments)
 
         const message = new Message({
@@ -112,12 +120,16 @@ async function main () {
   }
 
   const sr = await hypervisor.createStateRoot()
-  console.log('New state root:', sr.toString('hex'))
+  if (!argv.quiet) {
+    console.log('New state root:', sr.toString('hex'))
+  }
 
   let actorId
   if (argv.create && !!module) {
     actorId = module.id.id
-    console.log('Created actor with id', actorId.toString('hex'))
+    if (!argv.quiet) {
+      console.log('Created actor with id', actorId.toString('hex'))
+    }
   }
   if (argv.actor) {
     if (typeof argv.actor == 'string') {
