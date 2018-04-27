@@ -26,6 +26,7 @@ const argv = require('yargs')
   .describe('r', 'Initial state root')
   .example('$0 -c test.wasm -r ed418f9ba309cb65e34a16ed74253fc813a78412', 'create module test with initial state root')
   .example('$0 -c test.wasm -f main --main 1,2 -a', 'create module, invoke main(1, 2), and get state')
+  .example('$0 -c test.wasm -f main --main egress', 'create module, invoke main(egress) where egress is a built-in funcref for printing to stdout')
   .argv
 
 egress.on('message', msg => {
@@ -98,6 +99,11 @@ async function main () {
         if (params.length != funcArguments.length) {
           console.error('Invalid arguments, want:', params, 'got:', funcArguments)
           return
+        }
+
+        let index = funcArguments.indexOf('egress')
+        if (index !== -1) {
+            funcArguments[index] = new FunctionRef({actorID: egress.id, params: ['data']})
         }
 
         console.log('Invoke', funcRef.identifier[1], funcArguments)
