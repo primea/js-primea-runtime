@@ -22,6 +22,7 @@ const argv = require('yargs')
   .alias('a', 'actor')
   .describe('a', 'Get state of an actor')
   .alias('r', 'root')
+  .option('gas', { default: 100000 })
   .describe('r', 'Initial state root')
   .example('$0 -c test.wasm -r ed418f9ba309cb65e34a16ed74253fc813a78412', 'create module test with initial state root')
   .example('$0 -c test.wasm -f main --main 1,2 -a', 'create module, invoke main(1, 2), and get state')
@@ -70,7 +71,7 @@ async function main () {
       funcs.forEach(f => {
         const params = module.exports[f]
         const funcRef = module.getFuncRef(f)
-        funcRef.gas = argv.gas || 100000
+        funcRef.gas = argv.gas
 
         let funcArguments = []
         if (argv[f]) {
