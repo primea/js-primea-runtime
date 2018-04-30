@@ -47,7 +47,7 @@ class TestWasmContainer extends WasmContainer {
 
 const hypervisor = new Hypervisor({
   tree,
-  containers: [TestWasmContainer],
+  modules: [WasmContainer],
   drivers: [egress]
 })
 
@@ -58,84 +58,86 @@ async function main () {
     await hypervisor.setStateRoot(toBuffer(argv.root))
   }
 
-  let module
   if (argv.create) {
     const wasm = fs.readFileSync(argv.create)
-    module = hypervisor.createActor(WasmContainer.typeId, wasm).module
+    const actor = hypervisor.newActor(WasmContainer, wasm)
 
-    if (argv.funcs) {
-      const funcs = argv.funcs.split(',')
-      const funcArgsIndex = {}
+    const funcRef = actor.getFuncRef('main')
+    console.log(funcRef)
+    funcRef.gas = 100000
+    // if (argv.funcs) {
+    //   const funcs = argv.funcs.split(',')
+    //   const funcArgsIndex = {}
 
-      funcs.forEach(f => {
-        const params = module.exports[f]
-        const funcRef = module.getFuncRef(f)
-        funcRef.gas = argv.gas || 100000
+    //   funcs.forEach(f => {
+    //     // const params = module.exports[f]
+    //     const funcRef = actor.getFuncRef(f)
+    //     console.log(funcRef)
+    //     funcRef.gas = argv.gas || 100000
 
-        let funcArguments = []
-        if (argv[f]) {
-          let thisArg = argv[f]
-          if (Array.isArray(thisArg)) {
-            if (!funcArgsIndex[f]) {
-              funcArgsIndex[f] = 0
-            }
-            thisArg = thisArg[funcArgsIndex[f]++]
-          }
-          const args = String(thisArg)
-          funcArguments = args.split(',').map(arg => {
-            if (arg.slice(0, 2) === '0x') {
-              return Buffer.from(arg.slice(2), 'hex')
+    //     let funcArguments = []
+    //     if (argv[f]) {
+    //       let thisArg = argv[f]
+    //       if (Array.isArray(thisArg)) {
+    //         if (!funcArgsIndex[f]) {
+    //           funcArgsIndex[f] = 0
+    //         }
+    //         thisArg = thisArg[funcArgsIndex[f]++]
+    //       }
+    //       const args = String(thisArg)
+    //       funcArguments = args.split(',').map(arg => {
+    //         if (arg.slice(0, 2) === '0x') {
+    //           return Buffer.from(arg.slice(2), 'hex')
+    //         } else if (!isNaN(arg)) {
+    //           return Number(arg)
+    //         }
 
-            } else if (!isNaN(arg)) {
-              return Number(arg)
-            }
+    //         return arg
+    //       })
+    //     }
 
-            return arg
-          })
-        }
+    //     // if (params.length !== funcArguments.length) {
+    //     //   console.error('Invalid arguments, want:', params, 'got:', funcArguments)
+    //     //   return
+    //     // }
 
-        if (params.length != funcArguments.length) {
-          console.error('Invalid arguments, want:', params, 'got:', funcArguments)
-          return
-        }
-
-        console.log('Invoke', funcRef.identifier[1], funcArguments)
+    //     console.log('Invoke', funcRef.identifier[1], funcArguments)
 
         const message = new Message({
           funcRef,
-          funcArguments
+          funcArguments: [new FunctionRef({actorID: egress.id, params: ['data']})]
         }).on('execution:error', e => console.error(e))
         hypervisor.send(message)
-      })
-      console.log()
-    }
-  }
+    //   })
+    //   console.log()
+    // }
+  // }
 
-  const sr = await hypervisor.createStateRoot()
-  console.log('New state root:', sr.toString('hex'))
+  // const sr = await hypervisor.createStateRoot()
+  // console.log('New state root:', sr.toString('hex'))
 
-  let actorId
-  if (argv.create && !!module) {
-    actorId = module.id.id
-    console.log('Created actor with id', actorId.toString('hex'))
-  }
-  if (argv.actor) {
-    if (typeof argv.actor == 'string') {
-      actorId = toBuffer(argv.actor)
-    }
-    if (!actorId) {
-      return
-    }
+  // let actorId
+  // if (argv.create && !!module) {
+    // actorId = module.id.id
+    // console.log('Created actor with id', actorId.toString('hex'))
+  // }
+  // if (argv.actor) {
+    // if (typeof argv.actor === 'string') {
+    //   actorId = toBuffer(argv.actor)
+    // }
+    // if (!actorId) {
+    //   return
+    // }
 
-    console.log('\nGet state for actor', actorId.toString('hex'))
-    const node = await hypervisor.tree.get(actorId)
-    if (node.value) {
-      console.log('Nonce:', node.value[1])
-      const storage = await hypervisor.tree.graph.get(node.node, '2')
-      console.log('Storage:', storage)
-    } else {
-      console.log('Actor not found!')
-    }
+    // console.log('\nGet state for actor', actorId.toString('hex'))
+    // const node = await hypervisor.tree.get(actorId)
+    // if (node.value) {
+    //   console.log('Nonce:', node.value[1])
+    //   const storage = await hypervisor.tree.graph.get(node.node, '2')
+    //   console.log('Storage:', storage)
+    // } else {
+    //   console.log('Actor not found!')
+    // }
   }
 }
 

@@ -15,10 +15,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "dfinity-radix-tree": "^0.2.1",
+    "dfinity-radix-tree": "^0.2.2",
     "level-browserify": "^1.1.2",
-    "primea-hypervisor": "^0.7.0",
-    "primea-wasm-container": "^0.4.2",
+    "primea-hypervisor": "^0.8.0",
+    "primea-wasm-container": "^0.7.1",
     "yargs": "^11.0.0"
   }
 }
